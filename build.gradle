@@ -1,0 +1,38 @@
+plugins {
+    id 'groovy'
+    id 'java'
+}
+
+group 'simple.sftp'
+version '1.0-SNAPSHOT'
+
+def groovyVersion = '3.0.5'
+def jUnitVersion = '4.12'
+def spockVersion = '2.0-M3-groovy-3.0'
+def jschVersion = '0.1.55'
+def lombokVersion = '1.18.12'
+def slf4jVersion = '1.7.30'
+def apacheCommonsVersion = '2.7'
+def typesafeConfigVersion = '1.4.0'
+def logbackVersion = '1.2.3'
+def guiceVersion = '4.2.3'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compile group: 'org.codehaus.groovy', name: 'groovy-all', version: groovyVersion, ext: 'pom'
+    compile group: 'com.jcraft', name: 'jsch', version: jschVersion
+    compile group: 'org.projectlombok', name: 'lombok', version: lombokVersion
+    compile group: 'org.slf4j', name: 'slf4j-api', version: slf4jVersion
+    compile group: 'commons-io', name: 'commons-io', version: apacheCommonsVersion
+    compile group: 'com.typesafe', name: 'config', version: typesafeConfigVersion
+    compile group: 'com.google.inject', name: 'guice', version: guiceVersion
+
+    annotationProcessor group: 'org.projectlombok', name: 'lombok', version: lombokVersion
+
+    testCompile group: 'ch.qos.logback', name: 'logback-classic', version: logbackVersion
+    testCompile group: 'junit', name: 'junit', version: jUnitVersion
+    testCompile group: 'org.spockframework', name: 'spock-core', version: spockVersion
+}
