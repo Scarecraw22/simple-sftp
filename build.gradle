@@ -4,7 +4,7 @@ plugins {
 }
 
 group 'simple.sftp'
-version '1.0-SNAPSHOT'
+version '0.1.0'
 
 def groovyVersion = '3.0.5'
 def jUnitVersion = '4.12'
@@ -35,4 +35,5 @@ dependencies {
     testCompile group: 'ch.qos.logback', name: 'logback-classic', version: logbackVersion
     testCompile group: 'junit', name: 'junit', version: jUnitVersion
     testCompile group: 'org.spockframework', name: 'spock-core', version: spockVersion
+    testCompile "org.testcontainers:testcontainers:1.14.3"
 }

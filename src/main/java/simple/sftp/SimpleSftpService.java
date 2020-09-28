@@ -1,9 +1,7 @@
 package simple.sftp;
 
-import com.jcraft.jsch.ChannelSftp;
-import com.jcraft.jsch.JSchException;
-import com.jcraft.jsch.Session;
-import com.jcraft.jsch.SftpException;
+import com.jcraft.jsch.*;
+import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 import simple.sftp.config.SftpConfig;
@@ -16,6 +14,7 @@ import javax.inject.Singleton;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.function.Consumer;
 
@@ -31,9 +30,8 @@ public class SimpleSftpService implements SftpService {
     private final SftpConfig config;
 
     @Inject
-    public SimpleSftpService(SessionManager sessionManager,
-                             SftpConfig sftpConfig) {
-        this.sessionManager = sessionManager;
+    public SimpleSftpService(SftpConfig sftpConfig) {
+        this.sessionManager = new SessionManager();
         this.config = sftpConfig;
     }
 
@@ -41,14 +39,14 @@ public class SimpleSftpService implements SftpService {
      * Uploads {@link InputStream} to remote server. File on remote server
      * will be uploaded on given destination.
      *
-     * @param inputStream {@link InputStream} to upload.
+     * @param inputStream     {@link InputStream} to upload.
      * @param destinationPath Path that {@link InputStream} will be saved on.
      * @throws UploadSftpException Thrown when uploading {@link InputStream} fails.
      */
     @Override
     public void upload(InputStream inputStream, String destinationPath) throws UploadSftpException {
         tryOrThrowUploadException(channelSftp -> {
-            upload(inputStream, destinationPath);
+            tryUploadOrThrowUploadException(channelSftp, inputStream, destinationPath);
         });
     }
 
@@ -56,7 +54,7 @@ public class SimpleSftpService implements SftpService {
      * Uploads {@link File} to remote server. {@link File} on remote server
      * will be uploaded on given destination.
      *
-     * @param sourceFile {@link File} to upload.
+     * @param sourceFile      {@link File} to upload.
      * @param destinationPath Path that {@link File} will be saved on.
      * @throws UploadSftpException Thrown when uploading {@link File} fails.
      */
@@ -64,7 +62,7 @@ public class SimpleSftpService implements SftpService {
     public void upload(File sourceFile, String destinationPath) throws UploadSftpException {
         tryOrThrowUploadException(channelSftp -> {
             try (InputStream inputStream = Files.newInputStream(sourceFile.toPath())) {
-                upload(inputStream, destinationPath);
+                tryUploadOrThrowUploadException(channelSftp, inputStream, destinationPath);
 
             } catch (IOException e) {
                 log.warn("Error while creating InputStream from file: {}", sourceFile.getAbsolutePath());
@@ -76,7 +74,7 @@ public class SimpleSftpService implements SftpService {
     /**
      * Downloads file on given path from remote server and saves it to given {@link File}.
      *
-     * @param sourcePath Path that desired file exists on remote server.
+     * @param sourcePath      Path that desired file exists on remote server.
      * @param destinationFile {@link File} that will be copy of file from remote server.
      * @throws DownloadSftpException Thrown when downloading fails.
      */
@@ -84,7 +82,7 @@ public class SimpleSftpService implements SftpService {
     public void download(String sourcePath, File destinationFile) throws DownloadSftpException {
         tryOrThrowDownloadException(channelSftp -> {
             try {
-                FileUtils.copyInputStreamToFile(download(channelSftp, sourcePath), destinationFile);
+                FileUtils.copyInputStreamToFile(tryDownloadOrThrowDownloadException(channelSftp, sourcePath), destinationFile);
 
             } catch (IOException e) {
                 log.warn("Error while trying to copy InputStream to file: {}", destinationFile.getAbsolutePath());
@@ -97,14 +95,14 @@ public class SimpleSftpService implements SftpService {
      * Downloads file on given path from remote server and runs given {@link Consumer} on
      * downloaded {@link InputStream}.
      *
-     * @param sourcePath Path that desired file exists on remote server.
+     * @param sourcePath         Path that desired file exists on remote server.
      * @param onDownloadConsumer Consumer that will accept {@link InputStream} after it's downloaded.
      * @throws DownloadSftpException Thrown when downloading fails.
      */
     @Override
     public void onDownload(String sourcePath, Consumer<InputStream> onDownloadConsumer) throws DownloadSftpException {
         tryOrThrowDownloadException(channelSftp -> {
-            try (InputStream inputStream = download(channelSftp, sourcePath)) {
+            try (InputStream inputStream = tryDownloadOrThrowDownloadException(channelSftp, sourcePath)) {
                 onDownloadConsumer.accept(inputStream);
 
             } catch (IOException e) {
@@ -114,7 +112,8 @@ public class SimpleSftpService implements SftpService {
         });
     }
 
-    private InputStream download(ChannelSftp channelSftp, String sourcePath) throws DownloadSftpException {
+    private InputStream tryDownloadOrThrowDownloadException(ChannelSftp channelSftp,
+                                                            String sourcePath) throws DownloadSftpException {
         try {
             log.debug("Trying to download file: {}", sourcePath);
             return channelSftp.get(sourcePath);
@@ -124,7 +123,9 @@ public class SimpleSftpService implements SftpService {
         }
     }
 
-    private void upload(ChannelSftp channelSftp, InputStream inputStream, String destinationPath) throws UploadSftpException {
+    private void tryUploadOrThrowUploadException(ChannelSftp channelSftp,
+                                                 InputStream inputStream,
+                                                 String destinationPath) throws UploadSftpException {
         try {
             log.debug("Trying to upload file to: {}", destinationPath);
             channelSftp.put(inputStream, destinationPath);
@@ -185,5 +186,31 @@ public class SimpleSftpService implements SftpService {
 
     private interface ChannelSftpConsumer {
         void accept(ChannelSftp channelSftp) throws SimpleSftpException;
+    }
+
+    private static final class SessionManager {
+        private final JSch jsch;
+
+        public SessionManager() {
+            this.jsch = new JSch();
+        }
+
+        /**
+         * Creates {@link Session} from {@link SftpConfig}.
+         *
+         * @param config {@link SftpConfig} required to create and configure {@link Session}.
+         * @return {@link Session} used in {@link SimpleSftpService}.
+         * @throws SimpleSftpException Thrown when creating and configuring {@link Session} fails.
+         */
+        public Session getSession(@NonNull SftpConfig config) throws SimpleSftpException {
+            try {
+                Session session = jsch.getSession(config.getUsername(), config.getHost(), config.getPort());
+                session.setPassword(config.getPassword().getBytes(StandardCharsets.UTF_8));
+                return session;
+            } catch (JSchException e) {
+                log.warn("Error while creating SFTP session");
+                throw new SimpleSftpException(e);
+            }
+        }
     }
 }
