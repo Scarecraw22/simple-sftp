@@ -1,5 +1,5 @@
-##Author: Oskar Wąsikowski
-####Based on library:
+## Author: Oskar Wąsikowski
+#### Based on library:
  * JCraft: https://github.com/is/jsch, http://www.jcraft.com/jsch/
  
 ##### TODO:
